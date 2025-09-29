@@ -1,312 +1,311 @@
-"""
-Wave AI - Simple AI Assistant (v1.0)
-Basic version for workshops - clean and easy to understand
-Created by Ayush Shukla
-"""
+# 🌊 Wave AI - Simple AI Assistant (v1.0)
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import google.generativeai as genai
-import os
-from datetime import datetime
-import uvicorn
+**Workshop-Ready AI Assistant - Clean, Professional & Easy to Use**
 
-# Load environment variables
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+> *The simplified version of Pixel AI - perfect for workshops, learning, and demonstrations. Built with FastAPI and Google Gemini.*
 
-app = FastAPI(
-    title="Wave AI",
-    description="Simple AI Assistant for Workshops",
-    version="1.0.0"
-)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Gemini](https://img.shields.io/badge/Google%20Gemini-Pro-8E75B2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+---
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+## ✨ **What Makes Wave AI Special?**
 
-# Initialize Gemini AI with dynamic model discovery
-def initialize_ai():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("❌ GEMINI_API_KEY not found")
-        return None
-    
-    # Clean and validate API key to prevent header validation errors
-    api_key = api_key.strip()
-    
-    # Basic API key format validation
-    if not api_key.startswith("AIza") or len(api_key) != 39:
-        print("❌ Invalid API key format detected")
-        print("💡 API key should start with 'AIza' and be 39 characters long")
-        return None
-    
-    # Check for invalid characters that cause header validation errors
-    if not api_key.replace("-", "").replace("_", "").isalnum():
-        print("❌ API key contains invalid characters")
-        return None
-    
-    try:
-        print("🔑 Configuring Gemini API...")
-        genai.configure(api_key=api_key)
-        
-        # Discover available models dynamically
-        print("🔍 Discovering available Gemini models...")
-        try:
-            available_models = list(genai.list_models())
-            if not available_models:
-                print("❌ No models found in your account")
-                return None
-                
-            print("📋 Available models:")
-            for model in available_models[:5]:  # Show first 5 models
-                print("   - {}".format(model.name))
-            
-            # Preferred models in order of preference (stable models first, avoid preview)
-            preferred_models = [
-                "models/gemini-1.5-flash",
-                "models/gemini-1.5-pro", 
-                "models/gemini-pro",
-                "models/gemini-1.0-pro",
-                "models/gemini-2.5-flash",  # New stable model
-            ]
-            
-            # Find the first available preferred model
-            selected_model_name = None
-            for pref_model in preferred_models:
-                for available_model in available_models:
-                    if available_model.name == pref_model:
-                        if 'generateContent' in available_model.supported_generation_methods:
-                            selected_model_name = pref_model
-                            break
-                if selected_model_name:
-                    break
-            
-            # If no preferred model found, use stable models (avoid preview models)
-            if not selected_model_name:
-                print("🔍 No preferred models found, searching for stable models...")
-                for available_model in available_models:
-                    if ('generateContent' in available_model.supported_generation_methods and 
-                        'preview' not in available_model.name.lower() and
-                        'experimental' not in available_model.name.lower()):
-                        selected_model_name = available_model.name
-                        print("✅ Found stable model: {}".format(selected_model_name))
-                        break
-            
-            # Last resort: use any available model (including preview)
-            if not selected_model_name:
-                print("⚠️ No stable models found, using first available model...")
-                for available_model in available_models:
-                    if 'generateContent' in available_model.supported_generation_methods:
-                        selected_model_name = available_model.name
-                        print("⚠️ Using preview/experimental model: {}".format(selected_model_name))
-                        break
-            
-            if not selected_model_name:
-                print("❌ No models support generateContent method")
-                return None
-                
-            print("🤖 Selected model: {}".format(selected_model_name))
-            model = genai.GenerativeModel(selected_model_name)
-            
-        except Exception as discovery_e:
-            print("⚠️ Model discovery failed, trying fallback: {}".format(str(discovery_e)))
-            # Fallback to hardcoded model names
-            fallback_models = ["gemini-1.5-flash", "gemini-pro", "gemini-1.0-pro"]
-            model = None
-            for fallback_name in fallback_models:
-                try:
-                    print("🔄 Trying fallback model: {}".format(fallback_name))
-                    model = genai.GenerativeModel(fallback_name)
-                    break
-                except:
-                    continue
-            
-            if not model:
-                print("❌ All fallback models failed")
-                return None
-        
-        # Test the selected model with a safe prompt
-        try:
-            print("🧪 Testing AI connection...")
-            # Use a very safe, neutral test prompt to avoid content filtering
-            safe_test_prompt = "Hello, can you say hi?"
-            test_response = model.generate_content(safe_test_prompt, generation_config={"max_output_tokens": 20})
-            
-            if test_response and hasattr(test_response, 'text') and test_response.text:
-                print("✅ Wave AI initialized and tested successfully")
-                return model
-            elif test_response and hasattr(test_response, 'candidates') and test_response.candidates:
-                # Check if response was blocked
-                candidate = test_response.candidates[0]
-                if hasattr(candidate, 'finish_reason'):
-                    if candidate.finish_reason == 2:  # RECITATION
-                        print("⚠️ Test blocked by content filter (RECITATION), but model should work for normal requests")
-                    elif candidate.finish_reason == 3:  # SAFETY
-                        print("⚠️ Test blocked by safety filter, but model should work for normal requests")
-                    else:
-                        print("⚠️ Test had finish_reason: {}".format(candidate.finish_reason))
-                return model  # Return model anyway, it might work for actual requests
-            else:
-                print("⚠️ AI test response was empty, but model should work for actual requests")
-                return model
-                
-        except Exception as test_e:
-            error_msg = str(test_e)
-            if "finish_reason" in error_msg.lower() or "recitation" in error_msg.lower():
-                print("⚠️ Test blocked by content filter, but model should work for normal requests")
-            else:
-                print("⚠️ AI connection test failed: {}".format(error_msg))
-            return model  # Still return model, might work for actual requests
-            
-    except Exception as e:
-        error_msg = str(e).lower()
-        if "api" in error_msg and "key" in error_msg:
-            print("❌ Invalid API key - please check your Gemini API key")
-        elif "quota" in error_msg or "limit" in error_msg:
-            print("❌ API quota exceeded - please check your Gemini API limits")
-        else:
-            print("❌ Failed to initialize AI: {}".format(str(e)))
-        return None
+Wave AI is the **simplified version** of Pixel AI, designed specifically for **workshops and learning**. No complex features or overwhelming options - just essential AI chat functionality that works perfectly for:
 
-# Initialize AI
-wave_ai = initialize_ai()
+- **🎓 Educational Workshops** - Perfect for teaching AI basics
+- **👶 Beginners** - Simple, clean interface that's easy to understand  
+- **💬 Pure Chat Focus** - Just you and the AI, no distractions
+- **🌊 Professional Design** - Beautiful dark black theme with smooth animations
+- **⚡ Based on Pixel AI** - Uses the same proven, reliable architecture
+- **📚 Learning Friendly** - Great for demonstrations and training sessions
 
-# Startup event to validate everything is ready
-@app.on_event("startup")
-async def startup_event():
-    print("🌊 Wave AI container starting...")
-    print("📡 Port configured for: {}".format(os.getenv('PORT', '8000')))
-    print("🔑 API Key configured: {}".format('✅' if os.getenv('GEMINI_API_KEY') else '❌'))
-    if wave_ai:
-        print("✅ Wave AI ready to serve requests")
-    else:
-        print("⚠️  Wave AI started but AI model may not be available")
+---
 
-# Data Models
-class ChatMessage(BaseModel):
-    message: str
+## 🚀 **Quick Start - Choose Your Deployment Method**
 
-class ChatResponse(BaseModel):
-    response: str
-    success: bool = True
+### **🔑 Prerequisites**
+1. **Google AI Studio**: Go to [Google AI Studio](https://ai.google.dev)
+   - Create a free account
+   - Generate your Gemini API key
+2. **Google Cloud Project**: Set up with **Owner** permissions
+   - Create or use existing GCP project
+   - Enable billing (required for Cloud Run)
+   - **You must have Owner role** on the project for the script to work
+3. **Google Cloud Shell**: Use GCP Cloud Shell (recommended)
+   - Automatically authenticated with your GCP account
+   - Pre-installed with `gcloud` CLI
+   - No local setup required
 
-# In-memory conversations
-conversations = []
+---
 
-# Generate AI Response with timeout protection
-async def generate_response(message: str) -> str:
-    if not wave_ai:
-        return "❌ AI is currently offline. Please check configuration."
-    
-    try:
-        # Enhanced generation config with timeout protection  
-        prompt = "You are Wave AI, a helpful assistant created by Aman Singh Yadav. Provide clear and helpful responses.\n\nHuman: {}\n\nWave AI:".format(message)
-        
-        response = wave_ai.generate_content(
-            prompt,
-            generation_config={
-                "max_output_tokens": 1024,
-                "temperature": 0.7,
-                "top_p": 0.8,
-                "top_k": 40,
-                "stop_sequences": []
-            },
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"}
-            ]
-        )
-        
-        if response and response.text:
-            return response.text.strip()
-        else:
-            return "I couldn't generate a response. Please try rephrasing your question."
-        
-    except Exception as e:
-        error_str = str(e).lower()
-        
-        # Handle specific error types with user-friendly messages
-        if "quota" in error_str or "limit" in error_str:
-            return "⏱️ I'm experiencing high demand right now. Please try again in a moment."
-        elif "timeout" in error_str or "deadline" in error_str:
-            return "⏱️ Request timed out. Please try again with a shorter message."
-        elif "api" in error_str and "key" in error_str:
-            return "🔑 Configuration issue detected. Please contact support."
-        elif "network" in error_str or "connection" in error_str:
-            return "🌐 Network connectivity issue. Please try again."
-        else:
-            return "⚠️ I encountered an error while processing your request. Please try again."
+## **Option 1: 🤖 Automated Deployment (Recommended)**
 
-            print("🔍 AI Generation Error: {}".format(str(e)))  # For debugging
-            return "⚠️ I encountered an error while processing you
-# Routes
-@app.get("/")
-async def root():
-    return FileResponse("static/index.html")
+**One-click deployment with our smart script!**
 
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy",
-        "ai_online": wave_ai is not None,
-        "timestamp": datetime.now().isoformat()
-    }
+```bash
+# Clone the project
+git clone <your-repo-url>
+cd wave_ai_assistant
 
-@app.post("/chat")
-async def chat(message: ChatMessage):
-    try:
-        print("💬 Received message: {}...".format(message.message[:50]))
-        
-        # Generate AI response
-        response_text = await generate_response(message.message)
-        
-        print("✅ Response generated successfully")
-        
-        # Store conversation
-        conversations.append({
-            "user": message.message,
-            "assistant": response_text,
-            "timestamp": datetime.now().isoformat()
-        })
-        
-        return ChatResponse(response=response_text, success=True)
-        
-    except Exception as e:
-        print("❌ Chat endpoint error: {}".format(str(e)))
-        return ChatResponse(
-            response="Sorry, I encountered an unexpected error. Please try again.", 
-            success=False
-        )
+# Run the automated deployment script
+chmod +x deploy.sh
+./deploy.sh
+```
 
-@app.get("/conversations")
-async def get_conversations():
-    return {"conversations": conversations[-10:]}  # Last 10 messages
+**✨ What the script does:**
+- 🔍 Checks your Google Cloud setup
+- 🏗️ Creates all required infrastructure
+- 🚀 Deploys Wave AI to Cloud Run
+- 🌐 Provides you with a live URL
 
-@app.delete("/conversations") 
-async def clear_conversations():
-    global conversations
-    conversations = []
-    return {"message": "Chat cleared"}
+**Perfect for:** Beginners, workshops, quick demos
 
-# For local development only
-# if __name__ == "__main__":
-#     port = int(os.getenv("PORT", 8000))
-#     print("🌊 Starting Wave AI...")
-#     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+---
+
+## **Option 2: 📖 Manual Deployment (For Learning)**
+
+**Step-by-step deployment to understand the process!**
+
+Follow the detailed guide: **[📋 MANUAL_DEPLOYMENT.md](MANUAL_DEPLOYMENT.md)**
+
+**What you'll learn:**
+- 🛠️ Google Cloud resource setup
+- 🏗️ Docker containerization
+- ☁️ Cloud Run deployment
+- 🔧 Troubleshooting techniques
+
+**Perfect for:** Students, developers wanting to understand the architecture
+
+---
+
+**🌐 Result:** Your Wave AI will be live on Google Cloud Run with a public URL!
+
+---
+
+## 🎯 **Key Features**
+
+### **🧠 Smart AI Assistant**
+Powered by Google Gemini Pro for intelligent conversations:
+
+- **💬 Natural Conversations** - Chat naturally with advanced AI
+- **🎯 Context Awareness** - Remembers conversation history  
+- **🔐 Secure & Private** - Your data stays protected
+- **⚡ Fast Responses** - Optimized for quick interactions
+- **🌐 Always Available** - 24/7 AI assistance
+
+### **📱 Beginner-Friendly Features**
+- **Simple Interface** - No confusing buttons or menus
+- **Quick Starters** - Click to try common tasks
+- **Conversation History** - Save and revisit your chats
+- **Real-time Status** - See AI connection status
+- **Mobile Responsive** - Works perfectly on any device
+
+### **🌙 Beautiful Dark Theme**
+- **Easy on the Eyes** - Perfect for extended use
+- **Modern Design** - Clean and professional
+- **Responsive** - Works on any device
+- **Animated** - Smooth and engaging
+
+---
+
+## 💡 **Perfect for Workshops**
+
+Wave AI is ideal for AI workshops and training because:
+
+- **No Complex Setup** - Just install and run
+- **Clear Examples** - Easy to demonstrate
+- **Professional UI** - Modern dark theme interface
+- **Interactive Chat** - Real-time AI conversations
+- **Developer Info** - Built-in "About" section
+
+---
+
+## 🛠️ **What's Included**
+
+```
+📦 Wave AI
+├── 🚀 main.py             # FastAPI application with built-in UI
+├── 📋 requirements.txt    # Production dependencies
+├── 🚢 deploy.sh          # Deployment script
+├── 🐳 Dockerfile         # Container setup
+└── 📖 README.md          # This guide
+```
+
+---
+
+## 🌍 **Deployment Options**
+
+### **Local Development** (Recommended for workshops)
+```bash
+python main.py
+```
+
+### **Google Cloud Run**
+```bash
+./deploy.sh  # One-command deployment
+```
+
+### **Docker**
+```bash
+docker build -t wave-ai .
+docker run -p 8000:8000 -e GEMINI_API_KEY=your-key wave-ai
+```
+
+---
+
+## 🎯 **Use Cases**
+
+### **For Beginners**
+- **Learn AI Basics** - Understand how AI assistants work
+- **Practice Conversations** - Get comfortable with AI interaction
+- **Explore AI Capabilities** - Test different types of questions
+
+### **For Workshops**
+- **Demonstrate AI** - Show how modern AI works
+- **Interactive Learning** - Let students try different prompts
+- **Real-time Results** - See AI responses instantly
+
+### **For Everyday Use**
+- **Get Quick Answers** - Ask anything you want to know
+- **Creative Help** - Brainstorm ideas and solve problems
+- **Learning Support** - Explain complex topics simply
+
+---
+
+## 🎨 **Screenshots**
+
+### **Main Interface**
+- 🌊 **Wave Animation** - Beautiful animated title
+- 💬 **Clean Chat** - Simple message interface
+- 🎯 **Quick Starters** - Easy buttons to get started
+
+### **Features**
+- 📊 **Live Stats** - See your conversation progress
+- 🔄 **Smart Suggestions** - AI suggests follow-up questions
+- 📱 **Mobile Friendly** - Works perfectly on phones
+
+---
+
+## ⚙️ **Configuration**
+
+### **Required**
+```bash
+GEMINI_API_KEY=your_google_gemini_api_key
+```
+
+### **Optional (Advanced)**
+Wave AI works great with defaults, but you can customize:
+- AI model temperature
+- Response length
+- Conversation history
+
+---
+
+## 👨‍💻 **About the Developer**
+
+**Aman Singh Yadav  
+*Cloud & DevOps Professional | AI Innovator*
+
+> *"Let my work speak for myself...Cheers....!!!! 🥂 😁"*
+
+### 📬 Connect
+- **📧 Email**: [amansinghyadav8112@gmail.com](mailto:amansinghyadav8112@gmail.com)
+- **💼 LinkedIn**: [Connect with me](http://linkedin.com/in/https://www.linkedin.com/in/aman-yadav-b66a8a297)
+- **🐙 GitHub**: [Wave AI by aman](https://github.com/ay8112/Wave-AI-BY-AMAN.git)
+- **📱 Phone**: +91-8112342069
+---
+
+## 🆚 **Wave AI vs Complex AI Tools**
+
+| Feature | Wave AI | Complex Tools |
+|---------|---------|---------------|
+| **Setup Time** | < 5 minutes | Hours |
+| **Dependencies** | 4 packages | 20+ packages |
+| **Interface** | Simple & Clean | Complex & Overwhelming |
+| **Learning Curve** | Minutes | Days |
+| **Workshop Ready** | ✅ Perfect | ❌ Too Complex |
+| **Beginner Friendly** | ✅ Yes | ❌ No |
+
+---
+
+## 🚨 **Troubleshooting**
+
+### **Common Issues**
+
+**❌ "API Key not found"**
+```bash
+# Make sure you set your key
+export GEMINI_API_KEY="your-actual-key-here"
+```
+
+**❌ "FastAPI not found"**
+```bash
+# Install the requirements
+pip install -r requirements.txt
+```
+
+**❌ "Port already in use"**
+```bash
+# Use a different port
+uvicorn main:app --host 0.0.0.0 --port 8001
+```
+
+---
+
+## 🤝 **Contributing**
+
+Wave AI is open source! We welcome:
+- **Bug Reports** - Help us improve
+- **Feature Requests** - Tell us what you need
+- **Code Contributions** - Make it better
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+---
+
+## 📄 **License**
+
+MIT License - Use freely, modify as needed, share with others!
+
+---
+
+## 🙏 **Acknowledgments**
+
+- **Google Gemini** - Powerful AI capabilities
+- **FastAPI** - High-performance web framework
+- **Python Community** - Continuous inspiration
+- **Workshop Participants** - Feedback and ideas
+
+---
+
+## 🎯 **What's Next?**
+
+Wave AI is continuously improving based on user feedback:
+
+- **Enhanced AI Features** - More intelligent responses
+- **Better Performance** - Faster load times and responses
+- **Enhanced UI** - Even more beginner-friendly
+- **Workshop Tools** - Special features for training
+
+---
+
+**© 2024 Wave AI • Built with ❤️ by Aman Singh Yadav • Powered by Google Gemini Pro**
+
+*Simple • Intelligent • Reliable • Perfect for Beginners*
+
+---
+
+## 🎉 **Ready to Get Started?**
+
+1. **Get your free Gemini API key** → [Google AI Studio](https://ai.google.dev)
+2. **Install Wave AI** → `pip install -r requirements.txt`
+3. **Set your key** → `export GEMINI_API_KEY="your-key"`
+4. **Start chatting** → `python main.py`
+
+**Welcome to the future of simple AI! 🌊**
