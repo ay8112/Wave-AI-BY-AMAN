@@ -213,7 +213,7 @@ Wave AI works great with defaults, but you can customize:
 ### 📬 Connect
 - **📧 Email**: [amansinghyadav8112@gmail.com](mailto:amansinghyadav8112@gmail.com)
 - **💼 LinkedIn**: [Connect with me](http://linkedin.com/in/https://www.linkedin.com/in/aman-yadav-b66a8a297)
-- **🐙 GitHub**: [Terra-GCP](https://github.com/Terra-GCP)
+- **🐙 GitHub**: [Wave Ai by AMAN ](https://github.com/ay8112/Wave-AI-BY-AMAN.git)
 - **📱 Phone**: +91-8112342069
 ---
 
