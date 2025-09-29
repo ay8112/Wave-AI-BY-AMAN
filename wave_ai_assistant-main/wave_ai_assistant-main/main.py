@@ -1,7 +1,8 @@
 """
 Wave AI - Simple AI Assistant (v1.0)
 Basic version for workshops - clean and easy to understand
-Created by Ayush Shukla
+Created by Aman singh yadav
+
 """
 
 from fastapi import FastAPI
